@@ -69,8 +69,8 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 			if (undo_recptr == log->oldest_data)
 			{
 				/*
-				 * If the discard location and the insert location is same then
-				 * there is nothing to discard.
+				 * If the discard location and the insert location is same
+				 * then there is nothing to discard.
 				 */
 				break;
 			}
@@ -236,6 +236,12 @@ UndoDiscard(TransactionId oldestXmin, bool *hibernate)
 	{
 		TransactionId oldest_xid = InvalidTransactionId;
 
+		/*
+		 * TODO: Here we rely on the fact that UndoLogControl slots can only
+		 * be recycled by the single undo worker process, and that's us.  May
+		 * need revising.
+		 */
+
 		/* We can't process temporary undo logs. */
 		if (log->meta.persistence == UNDO_TEMP)
 			continue;
@@ -252,10 +258,23 @@ UndoDiscard(TransactionId oldestXmin, bool *hibernate)
 			 */
 			if (!TransactionIdIsValid(log->oldest_xid))
 			{
-				UndoRecPtr urp = UndoLogGetFirstValidRecord(log->logno);
+				bool		full;
+				UndoRecPtr urp = UndoLogGetFirstValidRecord(log, &full);
 
 				if (!UndoRecPtrIsValid(urp))
+				{
+					/*
+					 * There is nothing to be discarded.  If there is also no
+					 * more free space, then a call to UndoLogDiscard() will
+					 * discard it the undo log completely and free up the
+					 * UndoLogControl slot.
+					 */
+					if (full)
+						UndoLogDiscard(MakeUndoRecPtr(log->meta.logno,
+													  log->meta.discard),
+									   InvalidTransactionId);
 					continue;
+				}
 
 				LWLockAcquire(&log->discard_lock, LW_SHARED);
 				log->oldest_data = urp;
@@ -287,7 +306,7 @@ UndoDiscard(TransactionId oldestXmin, bool *hibernate)
 /*
  * Fetch the latest urec pointer for the transaction.
  */
-UndoRecPtr
+static UndoRecPtr
 FetchLatestUndoPtrForXid(UndoRecPtr urecptr, UnpackedUndoRecord *uur_start,
 						 UndoLogControl *log)
 {
@@ -378,7 +397,7 @@ FetchLatestUndoPtrForXid(UndoRecPtr urecptr, UnpackedUndoRecord *uur_start,
 				 * The transaction is overflowed to the next log, so restart
 				 * the processing from then next log.
 				 */
-				log = UndoLogGet(UndoRecPtrGetLogNo(next_urecptr));
+				log = UndoLogGet(UndoRecPtrGetLogNo(next_urecptr), false);
 				if (uur != uur_start)
 					UndoRecordRelease(uur);
 				uur = next_uur;
@@ -401,7 +420,7 @@ FetchLatestUndoPtrForXid(UndoRecPtr urecptr, UnpackedUndoRecord *uur_start,
 void
 TempUndoDiscard(UndoLogNumber logno)
 {
-	UndoLogControl *log = UndoLogGet(logno);
+	UndoLogControl *log = UndoLogGet(logno, false);
 
 	/*
 	 * Discard the undo log for temp table only. Ensure that there is
