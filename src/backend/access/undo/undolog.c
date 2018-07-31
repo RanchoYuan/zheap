@@ -1510,6 +1510,7 @@ StartupUndoLogs(XLogRecPtr checkPointRedo)
 void
 LogUndoMetaData(xl_undolog_meta *xlrec)
 {
+	UndoLogControl *log = MyUndoLogState.logs[UNDO_PERMANENT];
 	XLogRecPtr	RedoRecPtr;
 	bool		doPageWrites;
 	XLogRecPtr	recptr;
@@ -1517,7 +1518,7 @@ LogUndoMetaData(xl_undolog_meta *xlrec)
 prepare_xlog:
 	GetFullPageWriteInfo(&RedoRecPtr, &doPageWrites);
 
-	if (NeedUndoMetaLog(RedoRecPtr))
+	if (log->lsn <= RedoRecPtr)
 	{
 		XLogBeginInsert();
 		XLogRegisterData((char *) xlrec, sizeof(xl_undolog_meta));
@@ -1526,7 +1527,7 @@ prepare_xlog:
 		if (recptr == InvalidXLogRecPtr)
 			goto prepare_xlog;
 
-		UndoLogSetLSN(recptr);
+		log->lsn = RedoRecPtr;
 	}
 }
 
@@ -1545,23 +1546,8 @@ NeedUndoMetaLog(XLogRecPtr redo_point)
 }
 
 /*
- * Update the WAL lsn in the undo.  This is to test whether we need to include
- * the xid to logno mapping information in the next WAL or not.
- */
-void
-UndoLogSetLSN(XLogRecPtr lsn)
-{
-	UndoLogControl *log = MyUndoLogState.logs[UNDO_PERMANENT];
-
-	Assert(AmAttachedToUndoLog(log));
-	log->lsn = lsn;
-}
-
-/*
- * Get an UndoLogControl pointer for a given logno.  This may require
- * attaching to a DSM segment if it isn't already attached in this backend.
- * Return NULL if there is no such logno because it has been entirely
- * discarded.
+ * Workhorse for get_undo_log_by_number().  Also callable directly if
+ * UndoLogLock is already held.
  */
 static UndoLogControl *
 get_undo_log_by_number(UndoLogNumber logno)
