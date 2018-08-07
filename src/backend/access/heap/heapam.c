@@ -412,7 +412,7 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 			else
 				valid = HeapTupleSatisfiesVisibility(&loctup, snapshot, buffer);
 
-			CheckForSerializableConflictOut(valid, scan->rs_rd, &loctup,
+			CheckForSerializableConflictOut(valid, scan->rs_rd, (void *) &loctup,
 											buffer, snapshot);
 
 			if (valid)
@@ -629,7 +629,7 @@ heapgettup(HeapScanDesc scan,
 													 snapshot,
 													 scan->rs_cbuf);
 
-				CheckForSerializableConflictOut(valid, scan->rs_rd, tuple,
+				CheckForSerializableConflictOut(valid, scan->rs_rd, (void *) tuple,
 												scan->rs_cbuf, snapshot);
 
 				if (valid && key != NULL)
@@ -1948,9 +1948,10 @@ heap_fetch(Relation relation,
 	valid = HeapTupleSatisfiesVisibility(tuple, snapshot, buffer);
 
 	if (valid)
-		PredicateLockTuple(relation, tuple, snapshot);
+		PredicateLockTid(relation, &(tuple->t_self), snapshot,
+						   HeapTupleHeaderGetXmin(tuple->t_data));
 
-	CheckForSerializableConflictOut(valid, relation, tuple, buffer, snapshot);
+	CheckForSerializableConflictOut(valid, relation, (void *) tuple, buffer, snapshot);
 
 	LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 
@@ -2093,7 +2094,7 @@ heap_hot_search_buffer(ItemPointer tid, Relation relation, Buffer buffer,
 
 			/* If it's visible per the snapshot, we must return it */
 			valid = HeapTupleSatisfiesVisibility(heapTuple, snapshot, buffer);
-			CheckForSerializableConflictOut(valid, relation, heapTuple,
+			CheckForSerializableConflictOut(valid, relation, (void *) heapTuple,
 											buffer, snapshot);
 			/* reset to original, non-redirected, tid */
 			heapTuple->t_self = *tid;
@@ -2101,7 +2102,8 @@ heap_hot_search_buffer(ItemPointer tid, Relation relation, Buffer buffer,
 			if (valid)
 			{
 				ItemPointerSetOffsetNumber(tid, offnum);
-				PredicateLockTuple(relation, heapTuple, snapshot);
+				PredicateLockTid(relation, &(heapTuple)->t_self, snapshot,
+									HeapTupleHeaderGetXmin(heapTuple->t_data));
 				if (all_dead)
 					*all_dead = false;
 				return true;
@@ -2267,7 +2269,7 @@ heap_get_latest_tid(Relation relation,
 		 * result candidate.
 		 */
 		valid = HeapTupleSatisfiesVisibility(&tp, snapshot, buffer);
-		CheckForSerializableConflictOut(valid, relation, &tp, buffer, snapshot);
+		CheckForSerializableConflictOut(valid, relation, (void *) &tp, buffer, snapshot);
 		if (valid)
 			*tid = ctid;
 
@@ -3239,7 +3241,7 @@ l1:
 	 * being visible to the scan (i.e., an exclusive buffer content lock is
 	 * continuously held from this point until the tuple delete is visible).
 	 */
-	CheckForSerializableConflictIn(relation, &tp, buffer);
+	CheckForSerializableConflictIn(relation, &(tp.t_self), buffer);
 
 	/* replace cid with a combo cid if necessary */
 	HeapTupleHeaderAdjustCmax(tp.t_data, &cid, &iscombo);
@@ -4173,7 +4175,7 @@ l2:
 	 * will include checking the relation level, there is no benefit to a
 	 * separate check for the new tuple.
 	 */
-	CheckForSerializableConflictIn(relation, &oldtup, buffer);
+	CheckForSerializableConflictIn(relation, &(oldtup.t_self), buffer);
 
 	/*
 	 * At this point newbuf and buffer are both pinned and locked, and newbuf
