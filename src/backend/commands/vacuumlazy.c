@@ -689,7 +689,8 @@ lazy_scan_heap(Relation onerel, int options, LVRelStats *vacrelstats,
 			for (i = 0; i < nindexes; i++)
 				lazy_vacuum_index(Irel[i],
 								  &indstats[i],
-								  vacrelstats);
+								  vacrelstats,
+								  vac_strategy);
 
 			/*
 			 * Report that we are now vacuuming the heap.  We also increase
@@ -1334,7 +1335,8 @@ lazy_scan_heap(Relation onerel, int options, LVRelStats *vacrelstats,
 		for (i = 0; i < nindexes; i++)
 			lazy_vacuum_index(Irel[i],
 							  &indstats[i],
-							  vacrelstats);
+							  vacrelstats,
+							  vac_strategy);
 
 		/* Report that we are now vacuuming the heap */
 		hvp_val[0] = PROGRESS_VACUUM_PHASE_VACUUM_HEAP;
@@ -1362,7 +1364,7 @@ lazy_scan_heap(Relation onerel, int options, LVRelStats *vacrelstats,
 
 	/* Do post-vacuum cleanup and statistics update for each index */
 	for (i = 0; i < nindexes; i++)
-		lazy_cleanup_index(Irel[i], indstats[i], vacrelstats);
+		lazy_cleanup_index(Irel[i], indstats[i], vacrelstats, vac_strategy);
 
 	/* If no indexes, make log report that lazy_vacuum_heap would've made */
 	if (vacuumed_pages)
@@ -1634,7 +1636,8 @@ lazy_check_needs_freeze(Buffer buf, bool *hastup)
 void
 lazy_vacuum_index(Relation indrel,
 				  IndexBulkDeleteResult **stats,
-				  LVRelStats *vacrelstats)
+				  LVRelStats *vacrelstats,
+				  BufferAccessStrategy vac_strategy)
 {
 	IndexVacuumInfo ivinfo;
 	PGRUsage	ru0;
@@ -1666,7 +1669,8 @@ lazy_vacuum_index(Relation indrel,
 void
 lazy_cleanup_index(Relation indrel,
 				   IndexBulkDeleteResult *stats,
-				   LVRelStats *vacrelstats)
+				   LVRelStats *vacrelstats,
+				   BufferAccessStrategy vac_strategy)
 {
 	IndexVacuumInfo ivinfo;
 	PGRUsage	ru0;
