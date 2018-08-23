@@ -5182,7 +5182,7 @@ BootStrapXLOG(void)
 	checkPoint.newestCommitTsXid = InvalidTransactionId;
 	checkPoint.time = (pg_time_t) time(NULL);
 	checkPoint.oldestActiveXid = InvalidTransactionId;
-	checkPoint.oldestXidWithEpochHavingUndo = 0;
+	checkPoint.oldestXidWithEpochHavingUndo = InvalidTransactionId;
 
 	ShmemVariableCache->nextXid = checkPoint.nextXid;
 	ShmemVariableCache->nextOid = checkPoint.nextOid;
