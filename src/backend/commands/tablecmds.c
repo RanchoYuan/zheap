@@ -13579,10 +13579,6 @@ PreCommit_on_commit_actions(void)
 		switch (oc->oncommit)
 		{
 			case ONCOMMIT_NOOP:
-			case ONCOMMIT_TEMP_DISCARD:
-				/* Discard temp table undo logs for temp tables. */
-				TempUndoDiscard(oc->relid);
-				break;
 			case ONCOMMIT_PRESERVE_ROWS:
 				/* Do nothing (there shouldn't be such entries, actually) */
 				break;
@@ -13620,6 +13616,10 @@ PreCommit_on_commit_actions(void)
 					Assert(oc->deleting_subid != InvalidSubTransactionId);
 					break;
 				}
+			case ONCOMMIT_TEMP_DISCARD:
+				/* Discard temp table undo logs for temp tables. */
+				TempUndoDiscard(oc->relid);
+				break;
 		}
 	}
 	if (oids_to_truncate != NIL)
