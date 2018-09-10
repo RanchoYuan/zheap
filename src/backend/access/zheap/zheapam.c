@@ -6028,7 +6028,9 @@ zheap_fetchinsertxid(ZHeapTuple zhtup, Buffer buffer)
 			 * reached the insert log and return the corresponding
 			 * transaction id.
 			 */
-			if (urec->uur_type == UNDO_INSERT)
+			if (urec->uur_type == UNDO_INSERT ||
+				urec->uur_type == UNDO_MULTI_INSERT ||
+				urec->uur_type == UNDO_INPLACE_UPDATE)
 			{
 				result = urec->uur_xid;
 				UndoRecordRelease(urec);
