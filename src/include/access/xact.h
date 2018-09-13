@@ -432,5 +432,6 @@ extern void EnterParallelMode(void);
 extern void ExitParallelMode(void);
 extern bool IsInParallelMode(void);
 extern void SetCurrentUndoLocation(UndoRecPtr urec_ptr);
+extern bool XidIsConcurrent(TransactionId xid);
 
 #endif							/* XACT_H */
